@@ -1,40 +1,98 @@
-name: Build and Release QORDY Bridge
+name: Build & Publish Release
 
 on:
   push:
-    branches: [ main ]
     tags:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  build:
-    name: Build (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: qordy_bridge_mac_arm64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: qordy_bridge_rs.exe
-
+  build-macos:
+    name: Build macOS DMG
+    runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
-      - name: Build Release Binary
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build macOS DMG
+        run: |
+          chmod +x scripts/build_macos_dmg.sh
+          ./scripts/build_macos_dmg.sh
 
-      - name: Upload Artifact
+      - name: Upload DMG Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: |
-            target/${{ matrix.target }}/release/qordy_bridge_rs*
+          name: Qordy_Bridge_macOS_DMG
+          path: dist/*.dmg
+
+  build-windows:
+    name: Build Windows Installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build Windows Release Binary
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Setup Inno Setup
+        uses: dactiv/setup-inno-setup@v1
+
+      - name: Compile Inno Setup Installer
+        run: |
+          mkdir dist -ErrorAction SilentlyContinue
+          iscc scripts/windows_installer.iss
+
+      - name: Upload Windows Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qordy_Bridge_Windows_Installer
+          path: dist/*.exe
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download macOS Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Qordy_Bridge_macOS_DMG
+          path: dist/
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Qordy_Bridge_Windows_Installer
+          path: dist/
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.exe
+            dist/SHA256SUMS.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true

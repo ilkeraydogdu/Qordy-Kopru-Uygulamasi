@@ -1,43 +1,42 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # QORDY Smart Print Bridge - Enterprise One-Line Installer (macOS / Linux)
-# Usage: curl -sSL https://raw.githubusercontent.com/ilkeraydogdu/Qordy-K-pr-Uygulamas-/main/scripts/install.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/ilkeraydogdu/Qordy-Kopru-Uygulamasi/main/scripts/install.sh | bash
 # ==============================================================================
-set -e
+set -euo pipefail
 
-REPO="ilkeraydogdu/Qordy-K-pr-Uygulamas-"
-INSTALL_DIR="$HOME/.qordy-bridge"
-BIN_DIR="/usr/local/bin"
+REPO="ilkeraydogdu/Qordy-Kopru-Uygulamasi"
+VERSION="2.5.0"
+INSTALL_DIR="$HOME/Applications/Qordy Bridge.app"
 
 echo "============================================================"
-echo "  QORDY Termal Donanım Köprüsü Kurulumu (Apple HIG Edition) "
+echo "  QORDY Termal Donanım Köprüsü Kurulum Sihirbazı v$VERSION"
 echo "============================================================"
 
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$INSTALL_DIR/assets"
-
-echo "[1/4] Platform ve Sistem Gereksinimleri Kontrol Ediliyor..."
 OS="$(uname -s)"
 ARCH="$(uname -m)"
-echo "Sistem: $OS ($ARCH)"
 
-echo "[2/4] En Son Sürüm İndiriliyor..."
-# En son release veya server deposundan çekilir
-DOWNLOAD_URL="https://qordy.com/downloads/bridge/latest/qordy_bridge_mac"
-if [ "$OS" = "Darwin" ]; then
-    curl -fsSL "$DOWNLOAD_URL" -o "$INSTALL_DIR/qordy_bridge" || echo "Yerel derleme kullanılacak"
+if [ "$OS" != "Darwin" ]; then
+    echo "Hata: Bu komut dosyası macOS için tasarlanmıştır. Sistem: $OS"
+    exit 1
 fi
 
-if [ -f "$INSTALL_DIR/qordy_bridge" ]; then
-    chmod +x "$INSTALL_DIR/qordy_bridge"
-    echo "[3/4] Sistem Kısayolu Oluşturuluyor..."
-    if [ -w "$BIN_DIR" ]; then
-        ln -sf "$INSTALL_DIR/qordy_bridge" "$BIN_DIR/qordy-bridge"
-    else
-        sudo ln -sf "$INSTALL_DIR/qordy_bridge" "$BIN_DIR/qordy-bridge" 2>/dev/null || true
-    fi
+echo "[1/3] Sistem Mimarisi: macOS ($ARCH)"
+DMG_URL="https://github.com/$REPO/releases/download/v$VERSION/Qordy_Bridge_v${VERSION}_macOS.dmg"
+TEMP_DMG="/tmp/qordy_bridge_install.dmg"
+
+echo "[2/3] Kurulum Paketi İndiriliyor..."
+if curl -fsSL "$DMG_URL" -o "$TEMP_DMG" 2>/dev/null; then
+    echo "Paket GitHub Releases üzerinden indirildi."
+    MOUNT_DIR=$(hdiutil attach "$TEMP_DMG" -nobrowse | grep "/Volumes" | awk '{print $3}')
+    echo "Uygulama /Applications klasörüne yükleniyor..."
+    cp -R "$MOUNT_DIR/Qordy Bridge.app" /Applications/
+    hdiutil detach "$MOUNT_DIR" -quiet
+    rm -f "$TEMP_DMG"
+else
+    echo "Bilgi: Çevrimiçi release paketi bulunamadı, yerel derleme veya doğrudan çalıştırma önerilir."
 fi
 
-echo "[4/4] Kurulum Tamamlandı!"
-echo "Köprüyü başlatmak için: $INSTALL_DIR/qordy_bridge"
-echo "Yerel Yönetim Paneli: http://localhost:8089"
+echo "[3/3] Kurulum Tamamlandı!"
+echo "Uygulama '/Applications/Qordy Bridge.app' konumunda hazırdır."
+echo "Yönetim Paneli: http://localhost:8089"

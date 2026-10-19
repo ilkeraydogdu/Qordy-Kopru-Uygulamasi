@@ -1,35 +1,26 @@
 # ==============================================================================
 # QORDY Smart Print Bridge - Enterprise One-Line Installer (Windows PowerShell)
-# Usage: irm https://raw.githubusercontent.com/ilkeraydogdu/Qordy-K-pr-Uygulamas-/main/scripts/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/ilkeraydogdu/Qordy-Kopru-Uygulamasi/main/scripts/install.ps1 | iex
 # ==============================================================================
 $ErrorActionPreference = "Stop"
 
-$InstallDir = "$env:LOCALAPPDATA\QORDY\Bridge"
-$ExePath = "$InstallDir\qordy_bridge_rs.exe"
+$Repo = "ilkeraydogdu/Qordy-Kopru-Uygulamasi"
+$Version = "2.5.0"
+$InstallerUrl = "https://github.com/$Repo/releases/download/v$Version/Qordy_Bridge_v${Version}_Windows_Setup.exe"
+$TempInstaller = "$env:TEMP\Qordy_Bridge_Setup.exe"
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  QORDY Termal Donanim Koprusu Windows Kurulumu             " -ForegroundColor Cyan
+Write-Host "  QORDY Termal Donanim Koprusu Windows Kurulumu v$Version" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
-If (!(Test-Path $InstallDir)) {
-    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+Write-Host "[1/3] Kurulum paketi indiriliyor..." -ForegroundColor Yellow
+try {
+    Invoke-WebRequest -Uri $InstallerUrl -OutFile $TempInstaller -UseBasicParsing
+    Write-Host "[2/3] Kurulum sessiz modda baslatiliyor..." -ForegroundColor Yellow
+    Start-Process -FilePath $TempInstaller -ArgumentList "/SILENT /TASKS=desktopicon,autostart" -Wait
+    Remove-Item -Force $TempInstaller -ErrorAction SilentlyContinue
+    Write-Host "[3/3] Kurulum basariyla tamamlandi!" -ForegroundColor Green
+    Write-Host "QORDY Koprusu baslatildi. Yonetim paneli: http://localhost:8089" -ForegroundColor Green
+} catch {
+    Write-Host "Paket indirilemedi: $($_.Exception.Message)" -ForegroundColor Red
 }
-
-Write-Host "[1/3] En guncel Windows kopru surumu indiriliyor..." -ForegroundColor Yellow
-$DownloadUrl = "https://qordy.com/downloads/bridge/latest/qordy_bridge_rs.exe"
-Try {
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $ExePath
-} Catch {
-    Write-Host "Bulut sunucusundan indirilemedi, GitHub uzerinden deneniyor..." -ForegroundColor DarkYellow
-}
-
-Write-Host "[2/3] Masaustu Kisayolu Olusturuluyor..." -ForegroundColor Yellow
-$WshShell = New-Object -comObject WScript.Shell
-$Shortcut = $WshShell.CreateShortcut("$env:USERPROFILE\Desktop\QORDY Koprusu.lnk")
-$Shortcut.TargetPath = $ExePath
-$Shortcut.WorkingDirectory = $InstallDir
-$Shortcut.Save()
-
-Write-Host "[3/3] Kurulum Tamamlandi!" -ForegroundColor Green
-Write-Host "Kopru baslatiliyor..." -ForegroundColor Green
-Start-Process $ExePath
