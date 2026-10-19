@@ -40,7 +40,7 @@ fn set_macos_dock_icon() {
         let app: id = msg_send![objc::class!(NSApplication), sharedApplication];
         let candidates = [
             "assets/AppIcon.icns",
-            "assets/qordy_app_icon.png",
+            "assets/favicon.png",
             "assets/logo.webp",
         ];
         for path in candidates {
@@ -63,7 +63,7 @@ fn set_macos_dock_icon() {
 
 fn load_tray_icon() -> Result<Icon, anyhow::Error> {
     let candidates = [
-        "assets/qordy_app_icon.png",
+        "assets/favicon.png",
         "assets/logo.webp",
     ];
     for c in candidates {
@@ -202,13 +202,14 @@ fn main() -> Result<(), anyhow::Error> {
     );
 
     let window_icon = {
-        if let Ok(img) = image::open("assets/qordy_app_icon.png") {
-            let rgba = img.into_rgba8();
-            let (w, h) = rgba.dimensions();
-            tao::window::Icon::from_rgba(rgba.into_raw(), w, h).ok()
-        } else {
-            None
-        }
+        let candidates = ["assets/favicon.png", "assets/logo.webp"];
+        candidates.iter().find_map(|p| {
+            image::open(p).ok().and_then(|img| {
+                let rgba = img.into_rgba8();
+                let (w, h) = rgba.dimensions();
+                tao::window::Icon::from_rgba(rgba.into_raw(), w, h).ok()
+            })
+        })
     };
 
     let mut win_builder = WindowBuilder::new()

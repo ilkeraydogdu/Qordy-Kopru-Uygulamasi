@@ -28,8 +28,9 @@ impl LocalServer {
 
         let app = Router::new()
             .route("/", get(index_handler))
+            .route("/assets/favicon.png", get(favicon_handler))
+            .route("/assets/logo.webp", get(qordy_logo_handler))
             .route("/assets/pofuduk-logo.svg", get(pofuduk_logo_handler))
-            .route("/assets/qordy-logo.png", get(qordy_logo_handler))
             .route("/api/status", get(status_handler))
             .route("/api/config", get(get_config_handler).post(save_config_handler))
             .route("/api/printers", get(printers_handler).post(add_printer_handler))
@@ -535,12 +536,16 @@ async fn handle_ws(mut socket: WebSocket, engine: Arc<BridgeEngine>) {
     }
 }
 
-async fn pofuduk_logo_handler() -> impl IntoResponse {
-    ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], include_str!("../assets/pofuduk-logo.svg"))
+async fn favicon_handler() -> impl IntoResponse {
+    ([(axum::http::header::CONTENT_TYPE, "image/png")], include_bytes!("../assets/favicon.png").as_slice())
 }
 
 async fn qordy_logo_handler() -> impl IntoResponse {
-    ([(axum::http::header::CONTENT_TYPE, "image/png")], include_bytes!("../assets/qordy_app_icon.png").as_slice())
+    ([(axum::http::header::CONTENT_TYPE, "image/webp")], include_bytes!("../assets/logo.webp").as_slice())
+}
+
+async fn pofuduk_logo_handler() -> impl IntoResponse {
+    ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], include_str!("../assets/pofuduk-logo.svg"))
 }
 
 async fn index_handler() -> Html<&'static str> {
@@ -553,6 +558,7 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QORDY Printer Bridge</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
   <style>
     :root {
       --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
@@ -1385,8 +1391,7 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
       <div class="sidebar-brand-footer">
         <div class="brand-crests-row">
           <div class="brand-crest-item" title="QORDY Restoran Donanım Çözümleri">
-            <img src="/assets/qordy-logo.png" alt="QORDY" style="width: 20px; height: 20px; border-radius: 5px; object-fit: cover;" />
-            <span class="brand-crest-name">QORDY</span>
+            <img src="/assets/logo.webp" alt="QORDY" style="height: 16px; max-width: 68px; object-fit: contain;" />
           </div>
           <div class="brand-divider"></div>
           <div class="brand-crest-item" title="Pofuduk Dijital Medya ve Yazılım Ltd. Şti.">
