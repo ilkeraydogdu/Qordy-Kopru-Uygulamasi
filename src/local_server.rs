@@ -28,6 +28,8 @@ impl LocalServer {
 
         let app = Router::new()
             .route("/", get(index_handler))
+            .route("/assets/pofuduk-logo.svg", get(pofuduk_logo_handler))
+            .route("/assets/qordy-logo.png", get(qordy_logo_handler))
             .route("/api/status", get(status_handler))
             .route("/api/config", get(get_config_handler).post(save_config_handler))
             .route("/api/printers", get(printers_handler).post(add_printer_handler))
@@ -533,6 +535,14 @@ async fn handle_ws(mut socket: WebSocket, engine: Arc<BridgeEngine>) {
     }
 }
 
+async fn pofuduk_logo_handler() -> impl IntoResponse {
+    ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], include_str!("../assets/pofuduk-logo.svg"))
+}
+
+async fn qordy_logo_handler() -> impl IntoResponse {
+    ([(axum::http::header::CONTENT_TYPE, "image/png")], include_bytes!("../assets/qordy_app_icon.png").as_slice())
+}
+
 async fn index_handler() -> Html<&'static str> {
     Html(APPLE_HIG_DASHBOARD_HTML)
 }
@@ -650,34 +660,78 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 0 8px 18px 8px;
+      padding: 0 4px 16px 4px;
       border-bottom: 1px solid var(--sidebar-border);
       margin-bottom: 16px;
     }
 
-    .brand-icon {
-      width: 38px;
-      height: 38px;
-      background: linear-gradient(135deg, #0071e3 0%, #34c759 100%);
-      border-radius: 10px;
+    .tenant-logo-wrap {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+    }
+
+    .tenant-logo-img {
+      width: 44px;
+      height: 44px;
+      border-radius: 11px;
+      object-fit: cover;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      display: block;
+      background: var(--bg-card);
+    }
+
+    body.dark-theme .tenant-logo-img {
+      border-color: rgba(255, 255, 255, 0.14);
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    .brand-meta {
+      min-width: 0;
+      flex: 1;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      box-shadow: 0 4px 12px rgba(0, 113, 227, 0.25);
+      flex-direction: column;
     }
 
     .brand-meta h1 {
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 700;
-      letter-spacing: -0.3px;
-      line-height: 1.2;
+      letter-spacing: -0.2px;
+      line-height: 1.25;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin: 0;
     }
 
-    .brand-meta span {
+    .tenant-branch-tag {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tenant-code-tag {
       font-size: 11px;
       color: var(--text-secondary);
-      font-weight: 500;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      margin-top: 1px;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tenant-code-badge {
+      display: inline-block;
+      font-weight: 600;
+      color: var(--text-primary);
     }
 
     .nav-section-title {
@@ -781,6 +835,46 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
       border-top: 1px solid var(--sidebar-border);
       font-size: 12px;
       color: var(--text-secondary);
+    }
+
+    .sidebar-brand-footer {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid var(--sidebar-border);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .brand-crests-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-crest-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .brand-crest-name {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      color: var(--text-primary);
+    }
+
+    .brand-divider {
+      width: 1px;
+      height: 14px;
+      background: var(--sidebar-border);
+    }
+
+    .brand-legal-text {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      line-height: 1.35;
     }
 
     /* Main Content Area */
@@ -1231,33 +1325,13 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
     <div class="window-traffic-lights-spacer"></div>
 
     <div class="brand-header">
-      <div class="brand-icon-crest" style="margin-right: 12px; display: flex; align-items: center;">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="36" height="36" fill="none">
-          <defs>
-            <linearGradient id="primaryMarkGrad" x1="30" y1="28" x2="90" y2="88" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#60A5FA" />
-              <stop offset="50%" stop-color="#3B82F6" />
-              <stop offset="100%" stop-color="#2563EB" />
-            </linearGradient>
-            <linearGradient id="accentDiamondGrad" x1="48" y1="46" x2="72" y2="68" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#93C5FD" />
-              <stop offset="50%" stop-color="#38BDF8" />
-              <stop offset="100%" stop-color="#2563EB" />
-            </linearGradient>
-          </defs>
-          <rect width="120" height="120" rx="26" fill="#0F172A" />
-          <path d="M34 46 L60 29 L86 46" stroke="url(#primaryMarkGrad)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-          <line x1="36" y1="48" x2="84" y2="48" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round" opacity="0.85" />
-          <rect x="37" y="54" width="7" height="23" rx="3.5" fill="url(#primaryMarkGrad)" />
-          <rect x="76" y="54" width="7" height="23" rx="3.5" fill="url(#primaryMarkGrad)" />
-          <path d="M60 52 L68.5 63.5 L60 75 L51.5 63.5 Z" fill="url(#accentDiamondGrad)" />
-          <circle cx="60" cy="63.5" r="2.2" fill="#FFFFFF" opacity="0.9" />
-          <rect x="29" y="83" width="62" height="5" rx="2.5" fill="url(#primaryMarkGrad)" />
-        </svg>
+      <div class="tenant-logo-wrap">
+        <img id="sidebarTenantLogo" src="https://qordy.com/assets/images/business/product/caddecafe_logo.webp" alt="İşletme Logosu" class="tenant-logo-img" onerror="this.src='https://qordy.com/assets/images/business/default.png'" />
       </div>
       <div class="brand-meta">
-        <h1 style="font-size: 16px; font-weight: 700; letter-spacing: 0.3px;">QORDY</h1>
-        <span style="font-size: 11px; color: var(--text-secondary);">Termal Donanım Köprüsü</span>
+        <h1 id="sidebarTenantName">Cadde Cafe</h1>
+        <div id="sidebarTenantBranch" class="tenant-branch-tag">Ana Şube</div>
+        <div class="tenant-code-tag">Şube Kodu: <span id="sidebarTenantCode" class="tenant-code-badge">#296466</span></div>
       </div>
     </div>
 
@@ -1279,10 +1353,6 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
         <svg viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
         <span>Fiş & Etiket Tasarımı</span>
       </li>
-      <li class="nav-item" onclick="switchTab('tab-mobile')">
-        <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="2" width="14" height="20" rx="3"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-        <span>Mobil Ağ Geçidi (LAN)</span>
-      </li>
       <li class="nav-item" onclick="switchTab('tab-logs')">
         <svg viewBox="0 0 24 24" fill="none"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
         <span>Sistem Konsolu</span>
@@ -1295,11 +1365,9 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
         <span id="sidebarStatusText">Sistem Hazır</span>
       </div>
       <div class="sidebar-sys-info">
-        <div>İşletme: <strong id="sidebarBusinessName" style="color: var(--text-primary)">Bağlantı Yok</strong></div>
-        <div>Şube: <strong id="sidebarBranchName" style="color: var(--text-primary)">-</strong></div>
-        <div id="sidebarIpText" style="margin-top: 2px;">Yerel IP: Yükleniyor...</div>
+        <div id="sidebarIpText">Yerel IP: Yükleniyor...</div>
       </div>
-      <div class="theme-toggle-row" style="margin-top: 8px;">
+      <div class="theme-toggle-row">
         <span>Açılışta Başlat</span>
         <label class="apple-switch">
           <input type="checkbox" id="autostartSwitch" onchange="toggleAutostart(this.checked)">
@@ -1313,8 +1381,21 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
           <span class="slider"></span>
         </label>
       </div>
-      <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 10px; line-height: 1.3;">
-        Pofuduk Dijital Medya ve Yazılım Ltd. Şti.<br>QORDY Donanım Köprüsü v2.5.0
+
+      <div class="sidebar-brand-footer">
+        <div class="brand-crests-row">
+          <div class="brand-crest-item" title="QORDY Restoran Donanım Çözümleri">
+            <img src="/assets/qordy-logo.png" alt="QORDY" style="width: 20px; height: 20px; border-radius: 5px; object-fit: cover;" />
+            <span class="brand-crest-name">QORDY</span>
+          </div>
+          <div class="brand-divider"></div>
+          <div class="brand-crest-item" title="Pofuduk Dijital Medya ve Yazılım Ltd. Şti.">
+            <img src="/assets/pofuduk-logo.svg" alt="Pofuduk Dijital" style="height: 16px; max-width: 75px; object-fit: contain;" />
+          </div>
+        </div>
+        <div class="brand-legal-text">
+          Pofuduk Dijital Medya ve Yazılım Ltd. Şti.<br>QORDY Donanım Köprüsü v2.5.0
+        </div>
       </div>
     </div>
   </aside>
@@ -1324,24 +1405,6 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
 
     <!-- TAB 1: GENEL BAKIŞ & DURUM -->
     <div id="tab-setup" class="tab-view active">
-      <!-- Enterprise Tenant Header -->
-      <div class="apple-card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(0, 113, 227, 0.05) 0%, rgba(52, 199, 89, 0.05) 100%); border-left: 4px solid var(--accent); padding: 18px 22px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-          <div style="display: flex; align-items: center; gap: 14px;">
-            <img id="tenantHeaderLogo" src="https://qordy.com/assets/images/business/product/caddecafe_logo.webp" alt="Cadde Cafe Logo" style="width: 54px; height: 54px; border-radius: 12px; object-fit: cover; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 4px 14px rgba(0,0,0,0.25);" />
-            <div>
-              <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.8px; color: var(--accent); text-transform: uppercase;">İşletme ve Şube İzolasyonu</span>
-              <h3 style="font-size: 19px; font-weight: 700; margin: 3px 0 4px 0;" id="tenantHeaderTitle">Cadde Cafe - Ana Şube</h3>
-              <p style="font-size: 12.5px; color: var(--text-secondary); margin: 0;" id="tenantHeaderDesc">Caferağa Mah. Moda Cad. No:42 Kadıköy / İstanbul</p>
-            </div>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-size: 12px; color: var(--text-secondary);">İşletme Kodu: <strong id="tenantHeaderCode" style="color: var(--accent); font-family: monospace; font-size: 13px;">#296466</strong></div>
-            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 3px;">Köprü Terminali: <strong id="tenantHeaderBridgeId" style="color: var(--text-primary); font-family: monospace;">bridge_6ad638585a7b7_1792424024</strong></div>
-          </div>
-        </div>
-      </div>
-
       <div class="view-header">
         <h2 class="view-title">Genel Bakış & Durum</h2>
         <p class="view-subtitle">QORDY Bulut Hesabı, Yerel Ağ ve Termal Yazıcıların Anlık Durumu</p>
@@ -1594,6 +1657,17 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
                 <span class="slider"></span>
               </label>
             </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--card-border); flex-wrap: wrap;">
+              <button class="btn-apple" onclick="printSampleLabel()">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="7" y1="7" x2="17" y2="7"></line><line x1="7" y1="12" x2="12" y2="12"></line></svg>
+                <span>Paket Etiketi Bas</span>
+              </button>
+              <button class="btn-apple btn-secondary" onclick="testDiagnosticReceipt()">
+                <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <span>Teşhis Raporu Bas</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1610,84 +1684,17 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
                 <!-- Canlı oluşturulacak -->
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- TAB 5: MOBİL AĞ GEÇİDİ -->
-    <div id="tab-mobile" class="tab-view">
-      <div class="view-header">
-        <h2 class="view-title">Mobil Ağ Geçidi (iOS & Android)</h2>
-        <p class="view-subtitle">Garsonların ve kasiyerlerin kullandığı telefonları yerel ağdan sıfır gecikmeyle köprüye bağlayın.</p>
-      </div>
-
-      <div class="apple-card">
-        <div class="card-headline">
-          <div>
-            <h3>Yerel Ağ Doğrudan Yazdırma (LAN Direct Gateway)</h3>
-            <p>İnternet bağlantısı kesilse dahi garsonların siparişleri yazıcılara <10ms içinde ulaşır.</p>
-          </div>
-          <span class="status-pill">
-            <span class="status-pulse"></span>
-            <span>LAN Servisi Aktif</span>
-          </span>
-        </div>
-
-        <!-- Diagram info -->
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 22px;">
-          <div style="background: var(--bg-subtle); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 18px; text-align: center;">
-            <div style="margin-bottom: 8px;">
-              <svg width="24" height="24" fill="none" stroke="var(--accent)" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-            </div>
-            <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">1. Garson Telefonu</h4>
-            <p style="font-size: 11.5px; color: var(--text-secondary);">QORDY Flutter Mobil Uygulaması</p>
-          </div>
-          <div style="background: var(--bg-subtle); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 18px; text-align: center;">
-            <div style="margin-bottom: 8px;">
-              <svg width="24" height="24" fill="none" stroke="var(--purple)" stroke-width="2" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-            </div>
-            <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">2. Rust Köprüsü</h4>
-            <p style="font-size: 11.5px; color: var(--text-secondary);" id="diagramIpText">http://192.168.1.105:8089</p>
-          </div>
-          <div style="background: var(--bg-subtle); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 18px; text-align: center;">
-            <div style="margin-bottom: 8px;">
-              <svg width="24" height="24" fill="none" stroke="var(--green)" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-            </div>
-            <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">3. Termal Yazıcı</h4>
-            <p style="font-size: 11.5px; color: var(--text-secondary);">Mutfak / Kasa Yazıcısı (RAW 9100)</p>
-          </div>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label">MOBİL API UÇ NOKTASI (REST POST)</label>
-          <div style="display: flex; gap: 10px;">
-            <input type="text" id="mobileEndpointDisplay" class="apple-input" readonly style="font-family: monospace; font-size: 13px;" />
-            <button class="btn-apple btn-secondary" onclick="copyMobileUrl()">
-              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-              <span>Kopyala</span>
+            <button class="btn-apple" style="margin-top: 16px; width: 100%; max-width: 320px;" onclick="sendTestPrint('', 'Varsayılan Yazıcı')">
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+              <span>Önizlenen Fişi Yazdır (Test Çıktısı Al)</span>
             </button>
           </div>
         </div>
-
-        <div style="display: flex; gap: 12px; margin-top: 14px;">
-          <button class="btn-apple" onclick="simulateMobileOrder()">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-            <span>Garson Siparişi Simüle Et (Teras 1)</span>
-          </button>
-          <button class="btn-apple btn-secondary" onclick="printSampleLabel()">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="7" y1="7" x2="17" y2="7"></line><line x1="7" y1="12" x2="12" y2="12"></line></svg>
-            <span>Paket Etiketi Bas (Barkodlu)</span>
-          </button>
-          <button class="btn-apple btn-secondary" onclick="testDiagnosticReceipt()">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            <span>Sistem Teşhis Raporu Bas</span>
-          </button>
-        </div>
       </div>
     </div>
 
-    <!-- TAB 6: SİSTEM LOGLARI -->
+    <!-- TAB: SİSTEM LOGLARI -->
     <div id="tab-logs" class="tab-view">
       <div class="view-header">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -1880,47 +1887,46 @@ const APPLE_HIG_DASHBOARD_HTML: &str = r###"<!DOCTYPE html>
         document.getElementById('statUptime').innerText = data.uptime_seconds + 's';
 
         const ipPort = `${data.local_ip}:${data.local_port}`;
-        document.getElementById('sidebarIpText').innerText = `Yerel IP: ${ipPort}`;
-        document.getElementById('diagramIpText').innerText = `http://${ipPort}`;
-        document.getElementById('mobileEndpointDisplay').value = `http://${ipPort}/api/print`;
+        if (document.getElementById('sidebarIpText')) {
+          document.getElementById('sidebarIpText').innerText = `Yerel IP: ${ipPort}`;
+        }
 
         if (data.is_configured && data.business_name) {
-          if (document.getElementById('sidebarBusinessName')) {
-            document.getElementById('sidebarBusinessName').innerText = data.business_name;
+          if (document.getElementById('sidebarTenantLogo') && data.logo_url) {
+            document.getElementById('sidebarTenantLogo').src = data.logo_url;
           }
-          if (document.getElementById('sidebarBranchName')) {
-            document.getElementById('sidebarBranchName').innerText = data.branch_name ? `${data.branch_name} (${data.branch_code})` : (data.branch_code || '-');
+          if (document.getElementById('sidebarTenantName')) {
+            document.getElementById('sidebarTenantName').innerText = data.business_name;
           }
-          if (document.getElementById('tenantHeaderTitle')) {
-            document.getElementById('tenantHeaderTitle').innerText = `${data.business_name} - ${data.branch_name || 'Şube'}`;
+          if (document.getElementById('sidebarTenantBranch')) {
+            if (data.branch_name) {
+              document.getElementById('sidebarTenantBranch').innerText = data.branch_name;
+              document.getElementById('sidebarTenantBranch').style.display = 'block';
+            } else {
+              document.getElementById('sidebarTenantBranch').style.display = 'none';
+            }
           }
-          if (document.getElementById('tenantHeaderDesc')) {
-            document.getElementById('tenantHeaderDesc').innerText = 'Bu terminal yalnızca bağlı olduğu işletmenin ve şubenin sipariş kuyruğunu güvenli ve izole olarak yönetir.';
-          }
-          if (document.getElementById('tenantHeaderCode')) {
-            document.getElementById('tenantHeaderCode').innerText = data.branch_code || '-';
-          }
-          if (document.getElementById('tenantHeaderBridgeId')) {
-            document.getElementById('tenantHeaderBridgeId').innerText = data.bridge_id || '-';
+          if (document.getElementById('sidebarTenantCode')) {
+            const rawCode = data.branch_code || data.business_number || '';
+            document.getElementById('sidebarTenantCode').innerText = rawCode ? (rawCode.startsWith('#') ? rawCode : `#${rawCode}`) : '-';
           }
         } else {
-          if (document.getElementById('sidebarBusinessName')) {
-            document.getElementById('sidebarBusinessName').innerText = 'Bağlantı Yok';
+          if (document.getElementById('sidebarTenantName')) {
+            document.getElementById('sidebarTenantName').innerText = 'Bağlantı Yok';
           }
-          if (document.getElementById('sidebarBranchName')) {
-            document.getElementById('sidebarBranchName').innerText = '-';
+          if (document.getElementById('sidebarTenantBranch')) {
+            document.getElementById('sidebarTenantBranch').innerText = 'Yapılandırma Bekleniyor';
           }
-          if (document.getElementById('tenantHeaderTitle')) {
-            document.getElementById('tenantHeaderTitle').innerText = 'İşletme Bağlantısı Bekleniyor';
+          if (document.getElementById('sidebarTenantCode')) {
+            document.getElementById('sidebarTenantCode').innerText = '-';
           }
-          if (document.getElementById('tenantHeaderDesc')) {
-            document.getElementById('tenantHeaderDesc').innerText = 'Lütfen yönetim panelinizden aldığınız 64 karakterlik Yapılandırma Kodu (Config Code) ile bağlanın.';
-          }
-          if (document.getElementById('tenantHeaderCode')) {
-            document.getElementById('tenantHeaderCode').innerText = '-';
-          }
-          if (document.getElementById('tenantHeaderBridgeId')) {
-            document.getElementById('tenantHeaderBridgeId').innerText = '-';
+        }
+
+        if (document.getElementById('sidebarStatusText')) {
+          if (data.is_cloud_connected) {
+            document.getElementById('sidebarStatusText').innerText = 'Bulut Senkronize';
+          } else {
+            document.getElementById('sidebarStatusText').innerText = 'Sistem Hazır (Yerel)';
           }
         }
 

@@ -40,6 +40,10 @@ wry = "0.47"
 tray-icon = "0.19"
 image = { version = "0.25", default-features = false, features = ["png", "webp"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc = "0.2"
+
 [profile.release]
 opt-level = 3
 lto = true

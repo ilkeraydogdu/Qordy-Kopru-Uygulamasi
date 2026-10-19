@@ -30,14 +30,51 @@ use tray_icon::{
     Icon, TrayIconBuilder, TrayIconEvent,
 };
 
+#[cfg(target_os = "macos")]
+fn set_macos_dock_icon() {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::NSString;
+    use objc::{msg_send, sel, sel_impl};
+
+    unsafe {
+        let app: id = msg_send![objc::class!(NSApplication), sharedApplication];
+        let candidates = [
+            "assets/AppIcon.icns",
+            "assets/qordy_app_icon.png",
+            "assets/logo.webp",
+        ];
+        for path in candidates {
+            if std::path::Path::new(path).exists() {
+                if let Ok(abs_path) = std::fs::canonicalize(path) {
+                    let path_str = abs_path.to_string_lossy();
+                    let ns_str = NSString::alloc(nil).init_str(&path_str);
+                    let img: id = msg_send![objc::class!(NSImage), alloc];
+                    let img: id = msg_send![img, initWithContentsOfFile: ns_str];
+                    if img != nil {
+                        let _: () = msg_send![app, setApplicationIconImage: img];
+                        info!("macOS Dock uygulama ikonu başarıyla ayarlandı: {}", path);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn load_tray_icon() -> Result<Icon, anyhow::Error> {
-    if let Ok(img) = image::open("assets/logo.webp") {
-        let rgba = img.into_rgba8();
-        let resized = image::imageops::resize(&rgba, 32, 32, image::imageops::FilterType::Lanczos3);
-        let (w, h) = (resized.width(), resized.height());
-        let raw = resized.into_raw();
-        if let Ok(icon) = Icon::from_rgba(raw, w, h) {
-            return Ok(icon);
+    let candidates = [
+        "assets/qordy_app_icon.png",
+        "assets/logo.webp",
+    ];
+    for c in candidates {
+        if let Ok(img) = image::open(c) {
+            let rgba = img.into_rgba8();
+            let resized = image::imageops::resize(&rgba, 32, 32, image::imageops::FilterType::Lanczos3);
+            let (w, h) = (resized.width(), resized.height());
+            let raw = resized.into_raw();
+            if let Ok(icon) = Icon::from_rgba(raw, w, h) {
+                return Ok(icon);
+            }
         }
     }
 
@@ -77,8 +114,31 @@ fn main() -> Result<(), anyhow::Error> {
     info!("QORDY Termal Donanım Köprüsü (Apple Native Edition v2.5.0) başlatılıyor...");
 
     // 2. Yapılandırma Yöneticisi
-    let config_path =
-        std::env::var("QORDY_CONFIG_PATH").unwrap_or_else(|_| "config.json".to_string());
+    let config_path = std::env::var("QORDY_CONFIG_PATH").unwrap_or_else(|_| {
+        let mut candidates = Vec::new();
+        candidates.push(std::path::PathBuf::from("config.json"));
+
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                candidates.push(exe_dir.join("config.json"));
+                if let Some(app_dir) = exe_dir.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                    candidates.push(app_dir.join("config.json"));
+                }
+            }
+        }
+
+        if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
+            candidates.push(std::path::PathBuf::from(home).join(".qordy_bridge").join("config.json"));
+        }
+
+        for c in &candidates {
+            if c.exists() && c.is_file() {
+                info!("Yapılandırma dosyası bağlandı: {:?}", c);
+                return c.to_string_lossy().to_string();
+            }
+        }
+        "config.json".to_string()
+    });
     let config_mgr = Arc::new(ConfigManager::new(&config_path));
     let current_cfg = config_mgr.get();
     let local_port = current_cfg.local_port;
@@ -141,11 +201,29 @@ fn main() -> Result<(), anyhow::Error> {
         current_cfg.business_name, current_cfg.branch_name
     );
 
-    let window = WindowBuilder::new()
+    let window_icon = {
+        if let Ok(img) = image::open("assets/qordy_app_icon.png") {
+            let rgba = img.into_rgba8();
+            let (w, h) = rgba.dimensions();
+            tao::window::Icon::from_rgba(rgba.into_raw(), w, h).ok()
+        } else {
+            None
+        }
+    };
+
+    let mut win_builder = WindowBuilder::new()
         .with_title(&window_title)
         .with_inner_size(LogicalSize::new(1120.0, 780.0))
-        .with_min_inner_size(LogicalSize::new(880.0, 580.0))
-        .build(&event_loop)?;
+        .with_min_inner_size(LogicalSize::new(880.0, 580.0));
+
+    if let Some(w_icon) = window_icon {
+        win_builder = win_builder.with_window_icon(Some(w_icon));
+    }
+
+    let window = win_builder.build(&event_loop)?;
+
+    #[cfg(target_os = "macos")]
+    set_macos_dock_icon();
 
     // 8. Sistem Tepsisi (Tray Icon & Menu)
     let tray_menu = Menu::new();
