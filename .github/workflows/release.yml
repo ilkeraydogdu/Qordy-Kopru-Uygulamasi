@@ -44,14 +44,17 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Build Windows Release Binary
-        run: cargo build --release --target x86_64-pc-windows-msvc
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc
+          if (!(Test-Path "target\release")) { New-Item -ItemType Directory -Force -Path "target\release" }
+          Copy-Item "target\x86_64-pc-windows-msvc\release\qordy_bridge_rs.exe" "target\release\qordy_bridge_rs.exe" -Force
 
       - name: Setup Inno Setup
         uses: dactiv/setup-inno-setup@v1
 
       - name: Compile Inno Setup Installer
         run: |
-          mkdir dist -ErrorAction SilentlyContinue
+          if (!(Test-Path "dist")) { New-Item -ItemType Directory -Force -Path "dist" }
           iscc scripts/windows_installer.iss
 
       - name: Upload Windows Installer Artifact
