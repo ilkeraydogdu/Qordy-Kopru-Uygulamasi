@@ -1,6 +1,6 @@
 [package]
 name = "qordy_bridge_rs"
-version = "2.5.0"
+version = "2.5.1"
 edition = "2021"
 authors = ["QORDY <info@qordy.com>"]
 description = "QORDY Ultra-High-Performance Smart Print Bridge & LAN Gateway (Rust Edition)"

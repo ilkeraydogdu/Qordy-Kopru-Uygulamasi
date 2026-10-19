@@ -4,7 +4,7 @@
 ; ==============================================================================
 
 #define MyAppName "QORDY Smart Print Bridge"
-#define MyAppVersion "2.5.0"
+#define MyAppVersion "2.5.1"
 #define MyAppPublisher "Pofuduk Dijital Medya ve Yazilim Ltd. Sti."
 #define MyAppURL "https://qordy.com"
 #define MyAppExeName "qordy_bridge_rs.exe"
