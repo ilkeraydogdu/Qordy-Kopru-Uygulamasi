@@ -38,21 +38,31 @@ fn set_macos_dock_icon() {
 
     unsafe {
         let app: id = msg_send![objc::class!(NSApplication), sharedApplication];
-        let candidates = [
-            "assets/AppIcon.icns",
-            "assets/favicon.png",
-            "assets/logo.webp",
-        ];
+        let mut candidates = Vec::new();
+
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                if let Some(contents) = exe_dir.parent() {
+                    candidates.push(contents.join("Resources").join("AppIcon.icns"));
+                    candidates.push(contents.join("Resources").join("assets").join("AppIcon.icns"));
+                    candidates.push(contents.join("Resources").join("assets").join("favicon.png"));
+                }
+            }
+        }
+        candidates.push(std::path::PathBuf::from("assets/AppIcon.icns"));
+        candidates.push(std::path::PathBuf::from("assets/favicon.png"));
+        candidates.push(std::path::PathBuf::from("assets/logo.webp"));
+
         for path in candidates {
-            if std::path::Path::new(path).exists() {
-                if let Ok(abs_path) = std::fs::canonicalize(path) {
+            if path.exists() {
+                if let Ok(abs_path) = std::fs::canonicalize(&path) {
                     let path_str = abs_path.to_string_lossy();
                     let ns_str = NSString::alloc(nil).init_str(&path_str);
                     let img: id = msg_send![objc::class!(NSImage), alloc];
                     let img: id = msg_send![img, initWithContentsOfFile: ns_str];
                     if img != nil {
                         let _: () = msg_send![app, setApplicationIconImage: img];
-                        info!("macOS Dock uygulama ikonu başarıyla ayarlandı: {}", path);
+                        info!("macOS Dock uygulama ikonu başarıyla ayarlandı: {:?}", path);
                         break;
                     }
                 }
@@ -62,19 +72,13 @@ fn set_macos_dock_icon() {
 }
 
 fn load_tray_icon() -> Result<Icon, anyhow::Error> {
-    let candidates = [
-        "assets/favicon.png",
-        "assets/logo.webp",
-    ];
-    for c in candidates {
-        if let Ok(img) = image::open(c) {
-            let rgba = img.into_rgba8();
-            let resized = image::imageops::resize(&rgba, 32, 32, image::imageops::FilterType::Lanczos3);
-            let (w, h) = (resized.width(), resized.height());
-            let raw = resized.into_raw();
-            if let Ok(icon) = Icon::from_rgba(raw, w, h) {
-                return Ok(icon);
-            }
+    if let Ok(img) = image::load_from_memory(include_bytes!("../assets/favicon.png")) {
+        let rgba = img.into_rgba8();
+        let resized = image::imageops::resize(&rgba, 32, 32, image::imageops::FilterType::Lanczos3);
+        let (w, h) = (resized.width(), resized.height());
+        let raw = resized.into_raw();
+        if let Ok(icon) = Icon::from_rgba(raw, w, h) {
+            return Ok(icon);
         }
     }
 
@@ -115,28 +119,55 @@ fn main() -> Result<(), anyhow::Error> {
 
     // 2. Yapılandırma Yöneticisi
     let config_path = std::env::var("QORDY_CONFIG_PATH").unwrap_or_else(|_| {
-        let mut candidates = Vec::new();
-        candidates.push(std::path::PathBuf::from("config.json"));
+        // 1. Check local working directory config.json (for dev / portable mode)
+        let local_cfg = std::path::PathBuf::from("config.json");
+        if local_cfg.exists() && local_cfg.is_file() {
+            info!("Yerel çalışma dizini yapılandırması bağlandı: {:?}", local_cfg);
+            return "config.json".to_string();
+        }
 
+        // 2. Check next to executable
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                candidates.push(exe_dir.join("config.json"));
-                if let Some(app_dir) = exe_dir.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
-                    candidates.push(app_dir.join("config.json"));
+                let exe_cfg = exe_dir.join("config.json");
+                if exe_cfg.exists() && exe_cfg.is_file() {
+                    info!("Yürütülebilir dosya yanı yapılandırması bağlandı: {:?}", exe_cfg);
+                    return exe_cfg.to_string_lossy().to_string();
                 }
             }
         }
 
+        // 3. Persistent user directory (~/.qordy_bridge/config.json)
         if let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) {
-            candidates.push(std::path::PathBuf::from(home).join(".qordy_bridge").join("config.json"));
-        }
+            let user_dir = std::path::PathBuf::from(home).join(".qordy_bridge");
+            let user_cfg = user_dir.join("config.json");
+            if user_cfg.exists() && user_cfg.is_file() {
+                info!("Kullanıcı profil yapılandırması bağlandı: {:?}", user_cfg);
+                return user_cfg.to_string_lossy().to_string();
+            }
 
-        for c in &candidates {
-            if c.exists() && c.is_file() {
-                info!("Yapılandırma dosyası bağlandı: {:?}", c);
-                return c.to_string_lossy().to_string();
+            // If doesn't exist yet, automatically initialize it from default template
+            if let Ok(_) = std::fs::create_dir_all(&user_dir) {
+                let default_content = if let Ok(exe_path) = std::env::current_exe() {
+                    exe_path.parent()
+                        .and_then(|p| p.parent())
+                        .map(|c| c.join("Resources").join("config.default.json"))
+                        .and_then(|p| std::fs::read_to_string(p).ok())
+                } else {
+                    None
+                };
+
+                let content_to_write = default_content.unwrap_or_else(|| {
+                    include_str!("../config.json").to_string()
+                });
+
+                if let Ok(_) = std::fs::write(&user_cfg, content_to_write) {
+                    info!("Varsayılan yapılandırma kullanıcı dizinine oluşturuldu: {:?}", user_cfg);
+                    return user_cfg.to_string_lossy().to_string();
+                }
             }
         }
+
         "config.json".to_string()
     });
     let config_mgr = Arc::new(ConfigManager::new(&config_path));
@@ -202,14 +233,13 @@ fn main() -> Result<(), anyhow::Error> {
     );
 
     let window_icon = {
-        let candidates = ["assets/favicon.png", "assets/logo.webp"];
-        candidates.iter().find_map(|p| {
-            image::open(p).ok().and_then(|img| {
-                let rgba = img.into_rgba8();
-                let (w, h) = rgba.dimensions();
-                tao::window::Icon::from_rgba(rgba.into_raw(), w, h).ok()
-            })
-        })
+        if let Ok(img) = image::load_from_memory(include_bytes!("../assets/favicon.png")) {
+            let rgba = img.into_rgba8();
+            let (w, h) = rgba.dimensions();
+            tao::window::Icon::from_rgba(rgba.into_raw(), w, h).ok()
+        } else {
+            None
+        }
     };
 
     let mut win_builder = WindowBuilder::new()
