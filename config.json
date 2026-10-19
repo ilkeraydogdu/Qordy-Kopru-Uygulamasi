@@ -35,6 +35,8 @@
     }
   ],
   "screen_assignments": {
+    "kitchen_main": "printer-mutfak",
+    "cashier_main": "printer-kasa",
     "SCR_697CCB9328A82": "printer-mutfak",
     "SCR_KASA_ANA": "printer-kasa"
   }
