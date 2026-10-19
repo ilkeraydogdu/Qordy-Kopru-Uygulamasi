@@ -108,7 +108,8 @@ impl BridgeEngine {
 
         // Idempotency kontrolü - Çifte istekleri ve kağıt israfını engelle
         let fp = DeduplicationRing::generate_fingerprint(
-            job.order_id.as_deref().or(job.queue_id.as_deref()),
+            job.queue_id.as_deref(),
+            job.order_id.as_deref(),
             job.table_name.as_deref(),
             job.screen_id.as_deref(),
             job.screen_type.as_deref(),
@@ -253,11 +254,11 @@ pub fn spawn_cloud_workers(engine: Arc<BridgeEngine>) {
                         }
                     }
 
-                    // İş varsa hızlıca tekrar sor (500ms), yoksa bekle (1.5s)
+                    // İş varsa hemen peşinden hızlıca tekrar boşalt (50ms), yoksa bekle (500ms)
                     if has_jobs {
-                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        tokio::time::sleep(Duration::from_millis(50)).await;
                     } else {
-                        tokio::time::sleep(Duration::from_secs(cfg.poll_interval_secs.max(1))).await;
+                        tokio::time::sleep(Duration::from_millis(500)).await;
                     }
                 }
                 Err(e) => {

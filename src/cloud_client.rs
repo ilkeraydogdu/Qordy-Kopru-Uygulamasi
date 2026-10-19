@@ -19,6 +19,10 @@ impl CloudApiClient {
         let client = Client::builder()
             .timeout(Duration::from_secs(6))
             .user_agent("QORDY-Bridge-Rust/2.5.0")
+            .tcp_nodelay(true)
+            .tcp_keepalive(Duration::from_secs(30))
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(8)
             .build()
             .unwrap_or_default();
 

@@ -45,18 +45,23 @@ impl DeduplicationRing {
 
     /// Fiş/Sipariş için benzersiz parmak izi üret
     pub fn generate_fingerprint(
+        queue_id: Option<&str>,
         order_id: Option<&str>,
         table_name: Option<&str>,
         screen_id: Option<&str>,
         receipt_type: Option<&str>,
     ) -> String {
-        format!(
-            "ord:{}-tbl:{}-scr:{}-typ:{}",
-            order_id.unwrap_or("none"),
-            table_name.unwrap_or("none"),
-            screen_id.unwrap_or("none"),
-            receipt_type.unwrap_or("none")
-        )
+        if let Some(qid) = queue_id {
+            format!("qid:{}", qid)
+        } else {
+            format!(
+                "ord:{}-tbl:{}-scr:{}-typ:{}",
+                order_id.unwrap_or("none"),
+                table_name.unwrap_or("none"),
+                screen_id.unwrap_or("none"),
+                receipt_type.unwrap_or("none")
+            )
+        }
     }
 }
 
@@ -68,6 +73,7 @@ mod tests {
     fn test_dedup_suppresses_rapid_fire() {
         let dedup = DeduplicationRing::new(3);
         let fp = DeduplicationRing::generate_fingerprint(
+            Some("Q-999"),
             Some("ORD-101"),
             Some("Masa 4"),
             Some("kitchen"),
