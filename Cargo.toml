@@ -1,0 +1,48 @@
+[package]
+name = "qordy_bridge_rs"
+version = "2.5.0"
+edition = "2021"
+authors = ["QORDY <info@qordy.com>"]
+description = "QORDY Ultra-High-Performance Smart Print Bridge & LAN Gateway (Rust Edition)"
+
+[dependencies]
+# Async Runtime
+tokio = { version = "1.38", features = ["full"] }
+
+# Local HTTP & WebSocket Server (for Mobile Apps & Dashboard)
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Cloud REST API Client
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Data Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging & Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "time", "fmt"] }
+
+# Utilities
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+local-ip-address = "0.6"
+parking_lot = "0.12"
+anyhow = "1.0"
+thiserror = "1.0"
+futures-util = "0.3"
+async-trait = "0.1"
+
+# Native Desktop Window, WebKit Engine & System Tray
+tao = "0.31"
+wry = "0.47"
+tray-icon = "0.19"
+image = { version = "0.25", default-features = false, features = ["png", "webp"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

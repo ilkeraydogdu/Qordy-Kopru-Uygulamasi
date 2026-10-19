@@ -1,0 +1,41 @@
+{
+  "configured": true,
+  "bridge_id": "bridge_6ad638585a7b7_1792424024",
+  "config_code": "dd3078b238e59bf2869994f918bb4a3c903d4c10ba5ebdcd078812bcb89bd5f5",
+  "api_key": "42ac390b9f93aa624d7ed72b6ca603e408a9de3d8f859218c157019db3ff6700",
+  "api_base_url": "https://qordy.com/pb",
+  "business_id": "CUST_69653cfccb839",
+  "business_name": "Cadde Cafe",
+  "branch_name": "Ana Şube",
+  "branch_code": "296466",
+  "address": "Caferağa Mah. Moda Cad. No:42 Kadıköy / İstanbul",
+  "phone": "+90 (216) 345 67 89",
+  "logo_url": "https://qordy.com/assets/images/business/product/caddecafe_logo.webp",
+  "business_number": "296466",
+  "local_port": 8089,
+  "poll_interval_secs": 1,
+  "printers": [
+    {
+      "id": "printer-mutfak",
+      "name": "Mutfak Termal Yazıcı (Epson TM-T88VI)",
+      "printer_type": "network",
+      "ip_address": "192.168.1.200",
+      "port": 9100,
+      "paper_width": 48,
+      "is_default": true
+    },
+    {
+      "id": "printer-kasa",
+      "name": "Kasa Fiş Yazıcısı (Sistem Kuyruğu / USB)",
+      "printer_type": "usb",
+      "ip_address": null,
+      "port": null,
+      "paper_width": 48,
+      "is_default": false
+    }
+  ],
+  "screen_assignments": {
+    "SCR_697CCB9328A82": "printer-mutfak",
+    "SCR_KASA_ANA": "printer-kasa"
+  }
+}
