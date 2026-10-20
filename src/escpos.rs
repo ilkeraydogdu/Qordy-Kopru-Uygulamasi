@@ -23,7 +23,7 @@ pub struct EscPosBuilder {
 impl EscPosBuilder {
     pub fn new(width: usize, encoding: TurkishEncoding) -> Self {
         let mut builder = Self {
-            buffer: Vec::with_capacity(1024),
+            buffer: Vec::with_capacity(4096),
             width: if width == 0 { PAPER_WIDTH_80MM } else { width },
             encoding,
         };

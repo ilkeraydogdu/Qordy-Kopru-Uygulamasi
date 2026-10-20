@@ -1,28 +1,75 @@
 use crate::engine::BridgeEngine;
-use crate::escpos::ReceiptGenerator;
 use crate::models::{BridgeStatus, LocalPrintRequest, WsEvent};
 use crate::printer::PrinterBackend;
 use axum::{
+    body::Body,
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        Request, State,
     },
-    response::{Html, IntoResponse},
+    http::{header, StatusCode},
+    middleware::{self, Next},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use serde_json::json;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{Any, AllowOrigin, CorsLayer};
 use tracing::info;
+
+async fn auth_middleware(
+    State(engine): State<Arc<BridgeEngine>>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    // Only enforce auth on /api/* routes; allow static assets, dashboard, and WS through.
+    let path = request.uri().path();
+    if !path.starts_with("/api/") && path != "/api" {
+        return next.run(request).await;
+    }
+
+    let cfg = engine.config.get();
+
+    // If no API key is configured yet (bridge not registered), allow access
+    // so the user can complete registration via the dashboard.
+    if !cfg.configured || cfg.api_key.is_empty() {
+        return next.run(request).await;
+    }
+
+    let auth_header = request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
+
+    if token.is_empty() || token != cfg.api_key {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "success": false, "error": "Geçersiz veya eksik yetkilendirme token'ı" })),
+        )
+            .into_response();
+    }
+
+    next.run(request).await
+}
 
 pub struct LocalServer;
 
 impl LocalServer {
     pub async fn run(engine: Arc<BridgeEngine>, port: u16) -> Result<(), anyhow::Error> {
         let cors = CorsLayer::new()
-            .allow_origin(Any)
+            .allow_origin(AllowOrigin::predicate(|origin, _parts| {
+                let origin_str = origin.to_str().unwrap_or("");
+                origin_str == "http://localhost:8089"
+                    || origin_str == "http://127.0.0.1:8089"
+                    || origin_str.starts_with("http://localhost:")
+                    || origin_str.starts_with("http://127.0.0.1:")
+                    || origin_str == "null"
+            }))
             .allow_methods(Any)
             .allow_headers(Any);
 
@@ -45,15 +92,17 @@ impl LocalServer {
             .route("/api/register", post(register_handler))
             .route("/api/settings/autostart", post(set_autostart_handler))
             .route("/ws", get(ws_handler))
+            .layer(middleware::from_fn_with_state(
+                engine.clone(),
+                auth_middleware,
+            ))
             .layer(cors)
-            .with_state(engine);
+            .with_state(engine.clone());
 
-        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
         let listener = tokio::net::TcpListener::bind(addr).await?;
 
-        let local_ip = local_ip_address::local_ip()
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let local_ip = engine.local_ip.clone();
 
         info!("════════════════════════════════════════════════════════════");
         info!("  QORDY PRINTER BRIDGE (APPLE DESIGN NATIVE v2.5.0)");
@@ -70,8 +119,9 @@ async fn status_handler(State(engine): State<Arc<BridgeEngine>>) -> Json<BridgeS
     Json(engine.get_status())
 }
 
-async fn get_config_handler(State(engine): State<Arc<BridgeEngine>>) -> Json<crate::config::BridgeConfig> {
-    Json(engine.config.get())
+async fn get_config_handler(State(engine): State<Arc<BridgeEngine>>) -> impl IntoResponse {
+    let cfg = engine.config.get();
+    Json(serde_json::to_value(&*cfg).unwrap_or_default())
 }
 
 async fn save_config_handler(
@@ -101,7 +151,7 @@ async fn save_config_handler(
     });
 
     match result {
-        Ok(updated) => (axum::http::StatusCode::OK, Json(json!({ "success": true, "config": updated }))),
+        Ok(updated) => (axum::http::StatusCode::OK, Json(json!({ "success": true, "config": &*updated }))),
         Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "success": false, "error": e.to_string() }))),
     }
 }
@@ -202,9 +252,6 @@ async fn autodiscover_printers_handler(
     let discovered = crate::scanner::PrinterScanner::scan_all().await;
     let mut added_printers = Vec::new();
     let cfg = engine.config.get();
-    let local_ip = local_ip_address::local_ip()
-        .map(|ip| ip.to_string())
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
 
     for disc in &discovered {
         let exists = cfg.printers.iter().any(|p| {
@@ -234,13 +281,8 @@ async fn autodiscover_printers_handler(
                         });
                     });
 
-                    // Otonom ilk test çıktısı basımı
-                    let receipt_gen = crate::escpos::ReceiptGenerator::new(
-                        cfg.business_name.clone(),
-                        cfg.address.clone(),
-                        cfg.phone.clone(),
-                    );
-                    let test_bytes = receipt_gen.build_test_receipt(&local_ip, cfg.local_port, &disc.name);
+                    // Otonom ilk test çıktısı basımı — use cached generator (sync, no guard across await)
+                    let test_bytes = engine.generate_test_receipt(cfg.local_port, &disc.name);
                     let _ = p_arc.print_raw(&test_bytes).await;
 
                     added_printers.push(disc.name.clone());
@@ -358,17 +400,7 @@ async fn test_print_handler(
 
     if let Some(p) = printer {
         let cfg = engine.config.get();
-        let local_ip = local_ip_address::local_ip()
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
-
-        let receipt_gen = ReceiptGenerator::new(
-            cfg.business_name.clone(),
-            cfg.address.clone(),
-            cfg.phone.clone(),
-        );
-
-        let test_bytes = receipt_gen.build_test_receipt(&local_ip, cfg.local_port, p.name());
+        let test_bytes = engine.generate_test_receipt(cfg.local_port, p.name());
 
         match p.print_raw(&test_bytes).await {
             Ok(_) => (
@@ -394,9 +426,6 @@ async fn diagnostic_print_handler(
     let printer = engine.printers.get_default();
     if let Some(p) = printer {
         let cfg = engine.config.get();
-        let local_ip = local_ip_address::local_ip()
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
 
         let status = engine.get_status();
         let active_names: Vec<String> = engine
@@ -406,14 +435,7 @@ async fn diagnostic_print_handler(
             .map(|p| format!("{} [{}]", p.name(), p.printer_type().to_uppercase()))
             .collect();
 
-        let receipt_gen = ReceiptGenerator::new(
-            cfg.business_name.clone(),
-            cfg.address.clone(),
-            cfg.phone.clone(),
-        );
-
-        let diag_bytes = receipt_gen.build_diagnostic_receipt(
-            &local_ip,
+        let diag_bytes = engine.generate_diagnostic_receipt(
             cfg.local_port,
             &active_names,
             status.uptime_seconds,
@@ -449,14 +471,7 @@ async fn label_print_handler(
 
     let printer = engine.printers.get_default();
     if let Some(p) = printer {
-        let cfg = engine.config.get();
-        let receipt_gen = ReceiptGenerator::new(
-            cfg.business_name.clone(),
-            cfg.address.clone(),
-            cfg.phone.clone(),
-        );
-
-        let label_bytes = receipt_gen.build_label_receipt(item_name, table, order_no, notes);
+        let label_bytes = engine.generate_label_receipt(item_name, table, order_no, notes);
         match p.print_raw(&label_bytes).await {
             Ok(_) => (
                 axum::http::StatusCode::OK,

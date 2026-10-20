@@ -40,7 +40,7 @@ impl CloudApiClient {
         let current_cfg = self.config.get();
 
         let req = RegisterRequest {
-            bridge_id: current_cfg.bridge_id,
+            bridge_id: current_cfg.bridge_id.clone(),
             config_code: config_code.to_string(),
             device_name: std::env::var("HOSTNAME")
                 .or_else(|_| std::env::var("COMPUTERNAME"))
@@ -128,11 +128,17 @@ impl CloudApiClient {
 
         let url = format!("{}/heartbeat", self.base_url());
         let req = HeartbeatRequest {
-            bridge_id: cfg.bridge_id,
-            api_key: cfg.api_key,
+            bridge_id: cfg.bridge_id.clone(),
+            api_key: cfg.api_key.clone(),
         };
 
-        let resp = self.client.post(&url).json(&req).send().await?;
+        let resp = self
+            .client
+            .post(&url)
+            .bearer_auth(&cfg.api_key)
+            .json(&req)
+            .send()
+            .await?;
         if resp.status().is_success() {
             let body: HeartbeatResponse = resp.json().await?;
             return Ok(body.success);
@@ -148,7 +154,8 @@ impl CloudApiClient {
         let resp = self
             .client
             .get(&url)
-            .query(&[("bridge_id", &cfg.bridge_id), ("api_key", &cfg.api_key)])
+            .bearer_auth(&cfg.api_key)
+            .query(&[("bridge_id", &cfg.bridge_id)])
             .send()
             .await?;
 
@@ -171,11 +178,16 @@ impl CloudApiClient {
         let url = format!("{}/queue", self.base_url());
         let body = serde_json::json!({
             "bridge_id": cfg.bridge_id,
-            "api_key": cfg.api_key,
             "limit": 20
         });
 
-        let resp = self.client.post(&url).json(&body).send().await?;
+        let resp = self
+            .client
+            .post(&url)
+            .bearer_auth(&cfg.api_key)
+            .json(&body)
+            .send()
+            .await?;
         if resp.status().is_success() {
             let queue_resp: QueueResponse = resp.json().await?;
             if let Some(jobs) = queue_resp.jobs {
@@ -196,14 +208,20 @@ impl CloudApiClient {
         let url = format!("{}/update-status", self.base_url());
 
         let req = UpdateStatusRequest {
-            bridge_id: cfg.bridge_id,
-            api_key: cfg.api_key,
+            bridge_id: cfg.bridge_id.clone(),
+            api_key: String::new(),
             queue_id: queue_id.to_string(),
             status: status.to_string(),
             error_message: error_msg.map(|s| s.to_string()),
         };
 
-        let resp = self.client.post(&url).json(&req).send().await?;
+        let resp = self
+            .client
+            .post(&url)
+            .bearer_auth(&cfg.api_key)
+            .json(&req)
+            .send()
+            .await?;
         Ok(resp.status().is_success())
     }
 }

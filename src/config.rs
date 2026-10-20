@@ -75,7 +75,7 @@ impl Default for BridgeConfig {
 
 pub struct ConfigManager {
     path: PathBuf,
-    data: Arc<RwLock<BridgeConfig>>,
+    data: Arc<RwLock<Arc<BridgeConfig>>>,
 }
 
 impl ConfigManager {
@@ -109,22 +109,27 @@ impl ConfigManager {
 
         Self {
             path,
-            data: Arc::new(RwLock::new(config)),
+            data: Arc::new(RwLock::new(Arc::new(config))),
         }
     }
 
-    pub fn get(&self) -> BridgeConfig {
+    /// Returns a cheap Arc clone (pointer copy only, no deep clone of BridgeConfig).
+    pub fn get(&self) -> Arc<BridgeConfig> {
         self.data.read().clone()
     }
 
-    pub fn update<F>(&self, mut mutator: F) -> Result<BridgeConfig, anyhow::Error>
+    pub fn update<F>(&self, mut mutator: F) -> Result<Arc<BridgeConfig>, anyhow::Error>
     where
         F: FnMut(&mut BridgeConfig),
     {
         let updated = {
             let mut write_guard = self.data.write();
-            mutator(&mut write_guard);
-            write_guard.clone()
+            // Clone the inner config, mutate, then replace the Arc atomically
+            let mut cfg = (**write_guard).clone();
+            mutator(&mut cfg);
+            let new_arc = Arc::new(cfg);
+            *write_guard = new_arc.clone();
+            new_arc
         };
 
         self.save()?;
@@ -134,7 +139,7 @@ impl ConfigManager {
     pub fn save(&self) -> Result<(), anyhow::Error> {
         let json = {
             let read_guard = self.data.read();
-            serde_json::to_string_pretty(&*read_guard)?
+            serde_json::to_string_pretty(&**read_guard)?
         };
         std::fs::write(&self.path, json)?;
         info!("Yapılandırma diske kaydedildi: {:?}", self.path);

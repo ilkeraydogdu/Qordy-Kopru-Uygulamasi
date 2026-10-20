@@ -1,6 +1,8 @@
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
+use tokio::sync::Semaphore;
 use tokio::time::timeout;
 use tracing::info;
 
@@ -32,7 +34,16 @@ impl PrinterScanner {
     }
 
     /// Yerel IP alt ağını (192.168.x.1..=254) paralel async olarak tara
+    /// Max 32 eşzamanlı TCP bağlantı ile sınırlı (Semaphore korumalı)
     pub async fn scan_network(probe_timeout: Duration) -> Vec<DiscoveredPrinter> {
+        Self::scan_network_with_limit(probe_timeout, 32).await
+    }
+
+    /// Configurable concurrency limit for network scanning
+    pub async fn scan_network_with_limit(
+        probe_timeout: Duration,
+        max_concurrent: usize,
+    ) -> Vec<DiscoveredPrinter> {
         let local_ip = match local_ip_address::local_ip() {
             Ok(IpAddr::V4(ipv4)) => ipv4,
             _ => return Vec::new(),
@@ -40,15 +51,21 @@ impl PrinterScanner {
 
         let octets = local_ip.octets();
         let subnet_prefix = format!("{}.{}.{}", octets[0], octets[1], octets[2]);
-        info!("Ağdaki termal yazıcılar otonom taranıyor: {}.1 - 254 (Port 9100)...", subnet_prefix);
+        info!(
+            "Ağdaki termal yazıcılar otonom taranıyor: {}.1 - 254 (Port 9100, max_concurrent={})...",
+            subnet_prefix, max_concurrent
+        );
 
+        let semaphore = Arc::new(Semaphore::new(max_concurrent));
         let mut tasks = Vec::new();
 
-        for host in 1..=254 {
+        for host in 1..=254u32 {
             let ip_str = format!("{}.{}", subnet_prefix, host);
             let port = 9100u16;
+            let sem = semaphore.clone();
 
             tasks.push(tokio::spawn(async move {
+                let _permit = sem.acquire().await.expect("semaphore closed");
                 let addr_str = format!("{}:{}", ip_str, port);
                 if let Ok(addr) = addr_str.parse::<SocketAddr>() {
                     if let Ok(Ok(stream)) = timeout(probe_timeout, TcpStream::connect(addr)).await {
@@ -69,7 +86,10 @@ impl PrinterScanner {
         let mut results = Vec::new();
         for task in tasks {
             if let Ok(Some(printer)) = task.await {
-                info!("Yeni termal yazıcı otonom keşfedildi: {} -> {}:{}", printer.name, printer.ip_address, printer.port);
+                info!(
+                    "Yeni termal yazıcı otonom keşfedildi: {} -> {}:{}",
+                    printer.name, printer.ip_address, printer.port
+                );
                 results.push(printer);
             }
         }
